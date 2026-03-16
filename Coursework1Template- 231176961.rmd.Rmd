@@ -1,0 +1,209 @@
+---
+title: "MTH6139 Time Series" 
+subtitle: "Coursework 1 -- 231176961" 
+author: "Nazenie M Mulumba" 
+date: "Monday 9th March 2026" 
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: spacelab 
+    highlight: tango
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r, echo=FALSE}
+# This code will display the QMUL logo at the top right of the page
+# Do not change this code
+htmltools::img(src = knitr::image_uri("images/QMlogo.png"),
+               alt = 'logo',
+               style = 'position:absolute; top:0; right:0; padding:10px; width:20%;')
+```
+
+```{r setup, echo = FALSE,warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readxl)
+library(prophet)
+library(Rcpp);library(rlang)
+
+library(readxl)
+
+internet_reference_tables <- read_excel("data/internet reference tables.xlsx", sheet="My Data", skip=5)
+internet_reference_tables <- internet_reference_tables[1:231, ]
+```
+
+# Section 1: **Meta’s Prophet forecasting system**
+
+![](images/download.png){width="654"}
+
+## 1.1 Finding my data
+
+My interest in fashion inspired me to explore a time series that
+showcases the development of retail internet sales over time, using
+historical data.
+
+
+## 1.2 Setting up Time Series
+
+The Prophet library is a forecasting tool developed by Meta Platform,
+designed for time series forecasting. When installing the package to use
+the function **prophet**, I explored two methods: the default install or the
+latest version. Results indicated that for the default install, two
+other packages needed to be downloaded, whilst the latest version needed
+6 packages. I used the default install as this worked best with my R code, allowing me to set
+the foundation for analysing, forecasting and visualising my data :
+
+
+```{r}
+ds <- internet_reference_tables[,1]
+start_date <- as.Date("2006-11-30")
+end_date <- as.Date("2026-01-31")
+ds_1 <- seq.Date(from = start_date, to = end_date, by = "1 month")
+y <- as.numeric(internet_reference_tables[[2]])
+#length(ds_1);length(y), to ensure the data frame is of equal dimension
+d <- data.frame(ds = ds_1, y = y)
+```
+
+Here:
+
+1.  **ds_1** creates a monthly data sequence, representing the time column
+    of the data, **ds**, so Prophet recognises the time structure
+2.  **y** represents the retail internet sales between 2006 and 2026
+3.  **df** combines both into a dataframe, ensuring that both columns have
+    equal length
+
+## 1.3 Exploring Prophet
+
+There are numerous parts to the function **Prophet**. Given my data, I
+disabled the weekly and daily seasonality, as these patterns are not
+relevant, and focused on the monthly behaviour in internet sales.
+
+```{r}
+
+m <- prophet(d,weekly.seasonality=FALSE,daily.seasonality=FALSE)
+#?prophet
+
+f <- make_future_dataframe(m, periods = 11)
+#?make_future_dataframe
+
+p <- predict(m, f)
+```
+
+The **make_future_dataframe** function extends the dataset so that the
+**predict** function can forecast values up to 11 months, generating sales
+beyond the observed data.
+
+## 1.4 Prediction and Plot
+
+The plot of 'the average monthly internet sale' shows the historical
+data, forecasted values and prediction interval. The visuals portray the
+long-term trend, growth/decline of future prediction and uncertainty
+band.
+
+```{r, echo = FALSE,warning=FALSE, message=FALSE}
+plot(m, p, main = "NON-SEASONALLY ADJUSTED AVERAGE MONTHLY INTERNET SALES, in pounds million",
+     xlab = "Months between 2006-2026", ylab = "Sales in million pounds")
+
+```
+
+The **prophet_plot-components** function plots the components of the prophet
+forecast:
+
+1.  A positive trend
+2.  Yearly seasonality
+
+```{r, echo = FALSE, warning=FALSE, message=FALSE}
+prophet_plot_components(m,p)
+
+```
+
+# Section 2: Exploration of Data
+
+## 2.1 Linear regression
+
+A linear regression model is used to estimate the long-term trend in
+internet sales. The plot below highlights that internet sales are
+increasing.
+
+```{r, echo = FALSE}
+# Linear regression of Data
+t <- c(1:231)
+model <- lm(y~t)
+plot(y, main = "Linear trend in internet sales", xlab = "time", ylab = "Internet sales, pounds in millions")
+abline(model, col = "red")
+
+
+```
+
+The plot shows the residuals are not randomly distributed, but there is
+a gradual negative decrease, followed by a sudden increase with very
+spread points. This suggests the linear model is not fully capturing
+the structure of the data.
+
+```{r, echo = FALSE}
+res <- residuals(model)
+plot(res, main = "Residual")
+
+summary(model)
+```
+
+## 2.3 Hypothesis Testing of Time Series
+
+Let the significant figure be 5%
+
+When we test the dataset, we get:
+
+### Dickey-Fuller Test
+
+null hypothesis: time series is not stationary
+
+```{r,echo = FALSE}
+result <-tseries::adf.test(y)
+result
+```
+The p-value is larger than 0.05, so we have insufficient evidence to reject Ho, 
+which indicates the time series is not stationary.
+
+### Breusch-Pagan Test
+
+null hypothesis: time series has homoskedasticity
+```{r,echo = FALSE}
+lmtest::bptest(model)
+```
+The p-value is smaller than 0.05, so we have sufficient evidence to reject Ho, which indicates the time series has heteroskedasticity, confirming the results of the residual plot.
+
+### Ljung-Box Test
+
+null hypothesis: time series is white noise
+```{r,echo = FALSE}
+Box.test(y , type="Ljung-Box")
+```
+The p-value is much smaller than 0.05, so we have sufficient evidence to reject Ho, which indicates the time series is not white noise.
+
+### Box-Cox Transformation
+
+```{r,echo = FALSE}
+lam <- forecast::BoxCox.lambda(y)
+box_c <- forecast::BoxCox(y,lam)
+plot(box_c,main = "Box-Cox of Internet sales", ylab = "filtered internet sales" )
+```
+
+The optimal lambda for Box-Cox transformation is lambda = -0.09388.
+Since lambda is close to 0, the transformation behaves similar to the log transformation.
+This compresses the large values, reducing heteroskedasticity and stabilising variance.
+This makes the time series more stable for better forecasting.
+
+
+
+```
+
+# References
+- Data used: <https://www.statista.com/statistics/286032/internet-clothing-and-footwear-retail-sales-value-monthly-index-in-the-uk-2025/>
+-   Datacamp course:
+    <https://www.datacamp.com/courses/reporting-with-rmarkdown>
+-   RStudio reference: <https://rmarkdown.rstudio.com/lesson-1.html>
+-   More sophisticated reference:
+    <https://bookdown.org/yihui/rmarkdown/>
